@@ -1,0 +1,126 @@
+pipeline {
+  agent any
+
+  parameters {
+    booleanParam(
+      name: 'APPLY',
+      defaultValue: false,
+      description: 'Run terraform apply'
+    )
+  }
+
+environment {
+  TF_WORKDIR = "/workspace/${JOB_NAME}"
+  GITHUB_REPOSITORY = "victorhponcec/AWS-ASG"
+}
+
+
+  stages {
+
+    stage('Terraform Init') {
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform init
+          "
+        '''
+      }
+    }
+
+    stage('Terraform Plan') {
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform plan -out=tfplan
+          "
+        '''
+      }
+    }
+
+    stage('Checkov Scan') {
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform show -json tfplan > plan.json &&
+            checkov \
+              --framework terraform_plan \
+              --file plan.json \
+              --output json \
+              --soft-fail > checkov.json
+          "
+        '''
+      }
+    }
+
+stage('Summarize Checkov Results') {
+    steps {
+        sh '''
+        docker exec terraform sh -c '
+          cd /workspace/aws-asg-terraform-checkov-2 || exit 1
+
+          cat > summary.jq << "EOF"
+.summary as $s |
+"🔐 Checkov Security Scan Results\\n\\n" +
+"Critical: \\($s.critical)\\n" +
+"High: \\($s.high)\\n" +
+"Medium: \\($s.medium)\\n\\n" +
+"Top issues:\\n" +
+(
+  .results.failed_checks
+  | sort_by(.severity)
+  | .[:5]
+  | map("- \\(.check_id): \\(.check_name)")
+  | join("\\n")
+)
+EOF
+
+          jq -r -f summary.jq checkov.json > comment.txt
+        '
+        '''
+    }
+}
+
+stage('Comment Results on Main Commit') {
+  steps {
+    withCredentials([string(credentialsId: 'jenkins-checkov', variable: 'GITHUB_TOKEN')]) {
+      sh '''
+        set -e
+
+        COMMENT=$(docker exec terraform sh -c "
+          cd ${TF_WORKDIR} &&
+          jq -Rs '{body: .}' comment.txt
+        ")
+
+
+        echo "Repo: ${GITHUB_REPOSITORY}"
+        echo "Commit: ${GIT_COMMIT}"
+
+      curl -f -X POST \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GIT_COMMIT}/comments \
+        -d "$COMMENT"
+      '''
+    }
+  }
+}
+
+
+    stage('Terraform Apply') {
+      when {
+        expression { params.APPLY }
+      }
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform apply -auto-approve tfplan
+          "
+        '''
+      }
+    }
+  }
+}

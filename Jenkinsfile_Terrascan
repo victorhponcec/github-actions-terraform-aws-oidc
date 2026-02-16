@@ -1,0 +1,83 @@
+pipeline {
+  agent any
+
+  parameters {
+    booleanParam(
+      name: 'APPLY',
+      defaultValue: false,
+      description: 'Run terraform apply'
+    )
+  }
+
+  environment {
+    TF_WORKDIR = "/workspace/${JOB_NAME}"
+  }
+
+  stages {
+
+    stage('Terraform Init') {
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform init
+          "
+        '''
+      }
+    }
+
+    stage('Terraform Plan') {
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform plan -out=tfplan
+          "
+        '''
+      }
+    }
+
+stage('Terrascan Scan (Plan)') {
+  steps {
+    sh '''
+      docker exec terraform sh -c "
+        cd ${TF_WORKDIR} &&
+
+        terraform show -json tfplan > plan.json &&
+
+        # Fix Terraform plan format_version for Terrascan
+        sed -i 's/\\\"format_version\\\":\\\"1\\.[0-9]\\\"/\\\"format_version\\\":\\\"0.2\\\"/' plan.json &&
+
+        # Verify downgrade (MUST show 0.2)
+        grep format_version plan.json &&
+
+        # Terrascan Pipeline Options 1,2 (UNCOMMENT):
+        #1. Scan will throw error if there's a finding (Jenkins pipeline will fail on findings)
+        #terrascan scan \
+          #-i tfplan \
+          #-f plan.json
+
+        #2. Scan will not throw an error even if there are findings (Jenkins will success even on findings)
+        terrascan scan \
+          -i tfplan \
+          -f plan.json || true
+      "
+    '''
+  }
+}
+
+    stage('Terraform Apply') {
+      when {
+        expression { params.APPLY }
+      }
+      steps {
+        sh '''
+          docker exec terraform sh -c "
+            cd ${TF_WORKDIR} &&
+            terraform apply -auto-approve tfplan
+          "
+        '''
+      }
+    }
+  }
+}
