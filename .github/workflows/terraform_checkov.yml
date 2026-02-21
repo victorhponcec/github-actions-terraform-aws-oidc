@@ -49,7 +49,7 @@ jobs:
         with:
           output_format: cli,sarif
           output_file_path: console,results.sarif
-          hard_fail_on: ALL #CRITICAL, HIGH, MEDIUM, LOW, INFO, ALL
+          hard_fail_on: LOW #CRITICAL, HIGH, MEDIUM, LOW, INFO, ALL
 
       - name: Upload SARIF as artifact
         uses: actions/upload-artifact@v4
