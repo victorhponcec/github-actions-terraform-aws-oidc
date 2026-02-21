@@ -1,4 +1,6 @@
 #scans repo .tf files statically
+#MUST ENABLE CODE SCANNING IN REPO > SECURITY > CODE SCANNING | FOR PUBLIC REPOS / PAID ENTERPRISE PRIVATE
+
 name: checkov
 
 # Controls when the workflow will run
@@ -37,7 +39,7 @@ jobs:
           output_file_path: console,results.sarif
         
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         
         # Results are generated only on a success or failure
         # this is required since GitHub by default won't run the next step
