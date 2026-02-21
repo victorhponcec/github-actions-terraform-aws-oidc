@@ -9,14 +9,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # Required for AWS OIDC
+  id-token: write
   security-events: write
-  actions: read
 
 jobs:
 
   # =========================
-  # SECURITY SCAN
+  # CHECKOV SCAN
   # =========================
   scan:
     name: Checkov Scan
@@ -26,11 +25,13 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Run Checkov
+        id: checkov
         uses: bridgecrewio/checkov-action@v12
         with:
           output_format: cli,sarif
           output_file_path: console,results.sarif
           hard_fail_on: HIGH
+
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v4
@@ -45,14 +46,13 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     needs: scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    environment: production   # optional if we are using environments
+    # If Checkov fails → deploy NEVER runs | If Checkov passes → deploy runs | High findings+ → blocked
+    if: needs.scan.result == 'success' && github.ref == 'refs/heads/main'    
 
     steps:
       - uses: actions/checkout@v3
 
-      #Configure AWS using OIDC + GitHub variable role ARN
+      # 🔐 Configure AWS via OIDC
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -62,8 +62,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.14
-
+          terraform_version: 1.4.6
 
       - name: Terraform Init
         run: |
