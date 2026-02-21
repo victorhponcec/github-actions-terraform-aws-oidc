@@ -54,3 +54,4 @@ jobs:
         if: success() || failure()
         with:
           sarif_file: results.sarif
+          enable_secrets_scan_all_files: true #Shows severity
