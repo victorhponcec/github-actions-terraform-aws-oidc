@@ -44,6 +44,14 @@ jobs:
           output_file_path: console,results.sarif
           hard_fail_on: HIGH # only fails on HIGH
           enable_secrets_scan_all_files: true   # shows severity
+
+        # this block uploads sarif report to "Actions" UI
+      - name: Upload SARIF as artifact
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: checkov-sarif
+          path: results.sarif
         
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v4
