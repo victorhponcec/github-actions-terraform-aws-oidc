@@ -30,8 +30,7 @@ jobs:
         with:
           output_format: cli,sarif
           output_file_path: console,results.sarif
-          fail_on_severity: HIGH
-
+          hard_fail_on: HIGH
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v4
