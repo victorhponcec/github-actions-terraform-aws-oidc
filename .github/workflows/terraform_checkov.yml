@@ -1,3 +1,18 @@
+# ------------------------------------------------------------
+# Terraform CI/CD Pipeline
+#
+# 1. Runs Checkov security scan on every push and pull request.
+# 2. Fails the workflow only if HIGH severity findings are detected.
+#    (Medium and lower findings do NOT block deployment.)
+# 3. Uploads SARIF results to GitHub Security tab. | !!!!! VERIFY AND ADD SARIF TO ACTIONS UI WORKFLOW INSTEAD !!!!!
+# 4. If the scan passes and the event is a push to main:
+#    - Authenticates to AWS using OIDC
+#    - Runs Terraform init, validate, plan
+#    - Automatically applies the approved plan
+#
+# This ensures infrastructure is deployed only when
+# no HIGH security issues are present.
+# ------------------------------------------------------------
 name: terraform-ci-cd
 
 on:
@@ -35,6 +50,13 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,results.sarif
           hard_fail_on: HIGH
+
+      - name: Upload SARIF as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkov-sarif
+          path: results.sarif
 
       - name: Upload SARIF
         if: always()
